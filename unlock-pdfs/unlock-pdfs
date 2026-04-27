@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+POSTFIX=""
+FOLDER=""
+PASSWORD=""
+
+usage() {
+  echo "Usage: unlock-pdfs [--password PASS] [--postfix SUFFIX] FOLDER"
+  echo ""
+  echo "  Removes password protection from encrypted PDFs in FOLDER using qpdf."
+  echo "  Default: replaces files in place."
+  echo "  --password PASS   password to decrypt PDFs (default: empty)"
+  echo "  --postfix SUFFIX  save as new file instead (e.g. --postfix _unlocked)"
+  exit 1
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --password) PASSWORD="$2"; shift 2 ;;
+    --postfix)  POSTFIX="$2";  shift 2 ;;
+    -h|--help)  usage ;;
+    *)
+      if [[ -z "$FOLDER" ]]; then
+        FOLDER="$1"
+      else
+        echo "Error: unexpected argument '$1'" >&2; usage
+      fi
+      shift
+      ;;
+  esac
+done
+
+[[ -z "$FOLDER" ]] && usage
+
+if [[ ! -d "$FOLDER" ]]; then
+  echo "Error: '$FOLDER' is not a directory" >&2
+  exit 1
+fi
+
+if ! command -v qpdf &>/dev/null; then
+  echo "Error: qpdf not found. Install with: brew install qpdf" >&2
+  exit 1
+fi
+
+unlocked=0
+skipped=0
+not_encrypted=0
+total=0
+
+while IFS= read -r -d '' pdf; do
+  total=$((total + 1))
+  dir="$(dirname "$pdf")"
+  base="$(basename "$pdf" .pdf)"
+
+  if qpdf --show-encryption "$pdf" 2>/dev/null | grep -q "File is not encrypted"; then
+    echo "  not encrypted: $(basename "$pdf")"
+    not_encrypted=$((not_encrypted + 1))
+    continue
+  fi
+
+  if [[ -n "$POSTFIX" ]]; then
+    output="$dir/${base}${POSTFIX}.pdf"
+  else
+    output="$dir/${base}.__unlock_tmp.pdf"
+  fi
+
+  if qpdf --decrypt --password="$PASSWORD" "$pdf" "$output" 2>/dev/null; then
+    if [[ -z "$POSTFIX" ]]; then
+      mv "$output" "$pdf"
+    fi
+    echo "  unlocked: $(basename "$pdf")"
+    unlocked=$((unlocked + 1))
+  else
+    [[ -f "$output" ]] && rm -f "$output"
+    echo "  skipped (wrong password): $(basename "$pdf")"
+    skipped=$((skipped + 1))
+  fi
+done < <(find "$FOLDER" -type f -iname "*.pdf" -print0)
+
+echo ""
+echo "$unlocked unlocked, $skipped skipped, $not_encrypted not encrypted, $total total."

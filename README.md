@@ -18,3 +18,4 @@ Re-run `install.sh` any time you pull new commands — it's safe to run multiple
 | Command | Description |
 |---------|-------------|
 | `last-downloaded` | Print the path of the most recently downloaded file in ~/Downloads |
+| `unlock-pdfs` | Remove password protection from all PDFs in a folder |

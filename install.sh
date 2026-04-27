@@ -5,8 +5,14 @@ REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 TARGET_DIR="$HOME/.local/bin"
 
 # Add new scripts here as "subdir/script-name"
+# BREW_DEPS mirrors SCRIPTS — empty string means no dependency
 SCRIPTS=(
   "last-downloaded/last-downloaded"
+  "unlock-pdfs/unlock-pdfs"
+)
+BREW_DEPS=(
+  ""
+  "qpdf"
 )
 
 echo "The following commands will be installed to $TARGET_DIR:"
@@ -30,6 +36,21 @@ for s in "${SCRIPTS[@]}"; do
 done
 
 echo ""
+# Prompt to install missing brew dependencies
+for i in "${!SCRIPTS[@]}"; do
+  dep="${BREW_DEPS[$i]}"
+  [[ -z "$dep" ]] && continue
+  if ! command -v "$dep" &>/dev/null; then
+    read -r -p "  $dep is required by $(basename "${SCRIPTS[$i]}") — install via brew? [Y/n] " install_dep
+    install_dep="${install_dep:-Y}"
+    if [[ "$install_dep" =~ ^[Yy]$ ]]; then
+      brew install "$dep"
+    else
+      echo "  Skipped. Install manually: brew install $dep"
+    fi
+  fi
+done
+
 if ! printf '%s\n' "${PATH//:/$'\n'}" | grep -qx "$TARGET_DIR"; then
   echo "$TARGET_DIR is not on your PATH."
   read -r -p "Add it to ~/.zshrc now? [Y/n] " add_path
